@@ -1,4 +1,42 @@
-# Giả định và Giới hạn (Assumptions and Limitations)
+# Assumptions and Limitations
+
+This document describes the scope of the Concert Ticket Booking platform, detailing the assumptions made during development, the features implemented, and the parts intentionally excluded from the project scope (Limitations).
+
+## 1. Assumptions
+
+* **Authentication & Authorization:** Assumes an independent Identity Provider (e.g., Keycloak, Auth0, or an API Gateway) handles user logins. The backend fully trusts the `userId` passed via the API (in a real-world scenario, this value would be extracted from a validated JWT token).
+* **Payment Processing:** Actual payments require asynchronous callbacks from third-party payment gateways (Stripe, VNPay). Therefore, it is assumed that the status update API (`PATCH /api/bookings/{id}/status`) simulates a webhook response from a payment gateway, allowing the booking to transition from `PENDING` to `PAID` or `FAILED`.
+* **Booking State Machine:** A Booking has a strict state flow. It always initializes as `PENDING`, and can only transition to `PAID`, `CANCELLED`, or `FAILED`.
+* **Voucher Usage:** A voucher can be used by multiple people, but each person can only use it a limited number of times as defined by the `maxUsagePerUser` field. Upon a successful booking, the voucher usage is immediately recorded.
+* **Pre-configured by Admin:** Assumes the Administrator has pre-seeded data for Concerts, Ticket Categories, and Vouchers directly into the database. Thus, the operational APIs focus solely on tracking and operating on ongoing bookings rather than inputting master data.
+
+## 2. What We DID (Core Features)
+
+The system prioritizes building the Core Booking Engine to ensure stability, high concurrency handling, and reliability during Flash Sale campaigns:
+
+* **Preventing Overselling:** Implemented direct Atomic updates in the database (`reduceQuantity`) to completely prevent Overselling during traffic spikes without relying on complex Distributed Lock systems.
+* **Idempotency:** Applied the `Idempotency-Key` mechanism in the Booking creation flow to prevent **Duplicate Bookings** caused by flaky networks or users hitting retry multiple times.
+* **Voucher Abuse Prevention:** Built an ACID-compliant transaction flow using Database Locks to accurately verify individual user voucher usage (`VoucherHistory`), preventing fraud and limit evasion.
+* **Clean Architecture:** Applied SOLID principles by decoupling complex business logic into dedicated services (`BookingItemProcessingService`, `VoucherProcessingService`) behind a Facade (`BookingServiceImpl`).
+* **Pagination & Dynamic Searching:** All listing APIs are paginated (`Page<T>`) to prevent memory exhaustion. Added dynamic search capabilities (Criteria API) for concert listings.
+* **Independent Voucher Calculation API:** Separated the `calculateDiscount` API so the Client can preview the discount amount and final price before the user actually clicks the booking button.
+* **Audit Trail:** Implemented an asynchronous `OperationLog` system to track all Booking state changes for internal operational purposes.
+
+## 3. What We DID NOT DO (Out of Scope)
+
+Based on prioritizing the core values of the system, the following features were intentionally excluded from the design:
+
+* **CRUD APIs for Master Data:**
+  * APIs to Create/Update/Delete Concerts, Ticket Categories, and Vouchers are **not implemented**.
+  * *Reason:* These are basic CRUD operations that do not demonstrate the ability to solve complex technical challenges. The system relies on pre-seeded data (Database Seeding).
+* **Advanced User Management:** There is no User entity or Login/Registration flow. The system relies entirely on the `userId` parameter.
+* **Seat Selection:** The current system manages ticket inventory by *category* (Quantity per Category), rather than reserving specific seats on a seating chart.
+* **Distributed Caching:** Although using a Cache (like Redis) would optimize read speeds for concert lists, it was omitted to keep the Local Setup environment as simple as possible. The current design optimizes read speeds using Database Indexing.
+* **Cron Jobs (Auto-expire):** In reality, unpaid `PENDING` bookings would automatically expire after 15 minutes to release tickets back to the pool. This background schedule is out of scope for the test.
+
+---
+
+# Giả định và Giới hạn (Vietnamese Version)
 
 Tài liệu này mô tả phạm vi của nền tảng Concert Ticket Booking, trình bày chi tiết các giả định được đưa ra trong quá trình phát triển, các tính năng đã được triển khai, và các phần cố tình bị loại bỏ khỏi phạm vi dự án (Giới hạn).
 
@@ -10,7 +48,7 @@ Tài liệu này mô tả phạm vi của nền tảng Concert Ticket Booking, t
 * **Sử dụng Voucher:** Một voucher có thể được nhiều người sử dụng, nhưng mỗi người chỉ được dùng số lần nhất định do trường `maxUsagePerUser` quy định. Khi booking thành công, lượt dùng voucher sẽ lập tức được ghi nhận.
 * **Cấu hình sẵn từ Admin:** Giả định rằng quản trị viên (Admin) đã tạo sẵn dữ liệu về các Concerts (Sự kiện), Ticket Categories (Loại vé), và Vouchers trực tiếp dưới cơ sở dữ liệu. Do đó, các API phục vụ vận hành nội bộ (Operation) sẽ chỉ tập trung vào việc theo dõi và thao tác trên các đơn hàng đang diễn ra, chứ không làm chức năng nhập liệu master data.
 
-## 2. Những gì  ĐÃ LÀM (Tính năng cốt lõi)
+## 2. Những gì ĐÃ LÀM (Tính năng cốt lõi)
 
 Hệ thống ưu tiên xây dựng lõi đặt vé (Core Booking Engine) đảm bảo sự ổn định, chịu tải cao (High Concurrency) và đáng tin cậy trong các chiến dịch Flash Sale:
 
@@ -22,7 +60,7 @@ Hệ thống ưu tiên xây dựng lõi đặt vé (Core Booking Engine) đảm 
 * **API Tính Toán Voucher Độc Lập:** Tách biệt API `calculateDiscount` để Client có thể hiển thị trước số tiền được giảm và số tiền cuối cùng cho người dùng trước khi thực sự ấn nút đặt vé.
 * **Lịch sử Vận hành (Audit Trail):** Triển khai hệ thống `OperationLog` bất đồng bộ (Asynchronous) để ghi vết mọi thay đổi trạng thái của Booking, phục vụ cho bộ phận vận hành nội bộ.
 
-## 3. Những gì  KHÔNG LÀM (Giới hạn phạm vi)
+## 3. Những gì KHÔNG LÀM (Giới hạn phạm vi)
 
 Dựa trên việc ưu tiên các giá trị cốt lõi nhất của hệ thống, các tính năng sau đã chủ động được loại bỏ khỏi thiết kế:
 
