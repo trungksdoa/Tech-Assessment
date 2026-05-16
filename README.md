@@ -217,7 +217,7 @@ flowchart TD
 
 ## II. Thiết kế Cơ sở dữ liệu (Database Design)
 
-Sơ đồ Thực thể - Mối quan hệ (ERD) cốt lõi của hệ thống (Sơ đồ được giữ nguyên bản tiếng Anh):
+Sơ đồ Thực thể - Mối quan hệ (ERD) cốt lõi của hệ thống:
 
 ```mermaid
 erDiagram
