@@ -161,3 +161,4 @@ The project includes critical Unit Tests (JUnit 5 & Mockito) used to verify comp
 ```bash
 ./gradlew test
 ```
+# Tech-Assessment
