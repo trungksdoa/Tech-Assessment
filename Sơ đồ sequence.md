@@ -10,7 +10,10 @@ The main processing flow when a user attempts to reserve tickets. This flow solv
 - **Preventing Voucher Abuse:** Validating the usage history limit (`maxUsagePerUser`) and utilizing DB Locks.
 
 ```mermaid
-%%{init: {'theme': 'dark'}}%%
+---
+config:
+  theme: dark
+---
 sequenceDiagram
     autonumber
     actor Client
@@ -85,7 +88,10 @@ sequenceDiagram
 This flow is invoked *before* the user places an order, enabling the Client to display the discount amount and the final price to be paid, thus enhancing the user experience.
 
 ```mermaid
-%%{init: {'theme': 'dark'}}%%
+---
+config:
+  theme: dark
+---
 sequenceDiagram
     autonumber
     actor Client
@@ -132,7 +138,10 @@ sequenceDiagram
 Simulates a Webhook callback from a third-party payment gateway (e.g., VNPay, Momo, Stripe) updating the system.
 
 ```mermaid
-%%{init: {'theme': 'dark'}}%%
+---
+config:
+  theme: dark
+---
 sequenceDiagram
     autonumber
     actor Payment Gateway
