@@ -11,6 +11,7 @@
 The system is designed with a Monolithic architecture but strictly separates components based on **Clean Architecture** and **SOLID** principles. The diagram below illustrates the communication flow between the main components:
 
 ```mermaid
+%%{init: {'theme': 'neutral'}}%%
 C4Context
     title System Architecture - Concert Ticket Booking
     
@@ -56,6 +57,7 @@ C4Context
 Core Entity-Relationship Diagram (ERD) of the system:
 
 ```mermaid
+%%{init: {'theme': 'neutral'}}%%
 erDiagram
     CONCERTS ||--o{ TICKET_CATEGORIES : "has"
     USERS ||--o{ BOOKINGS : "places"
