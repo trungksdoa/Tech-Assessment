@@ -1,0 +1,163 @@
+<div align="center">
+  <h1>TECHNICAL ASSESSMENT</h1>
+  <h3>17/5/2026</h3>
+  <h4>Submitted by: Võ Hoàng Trung</h4>
+</div>
+
+---
+
+## I. System Design
+
+The system is designed with a Monolithic architecture but strictly separates components based on **Clean Architecture** and **SOLID** principles. The diagram below illustrates the communication flow between the main components:
+
+```mermaid
+C4Context
+    title System Architecture - Concert Ticket Booking
+    
+    Person(client, "Client", "User / Frontend Application")
+    Person(payment, "Payment Gateway", "Webhook from payment provider")
+    
+    System_Boundary(b1, "Ticket Booking Platform") {
+        Container(api, "API Gateway / Controllers", "Spring Boot", "Receives requests, handles Validation")
+        
+        System_Boundary(b2, "Service Layer (Business Logic)") {
+            Container(booking_svc, "Booking Facade Service", "Java", "Coordinates the main booking flow")
+            Container(ticket_svc, "Ticket Processing", "Java", "Handles Atomic ticket deductions")
+            Container(voucher_svc, "Voucher Processing", "Java", "Checks limits & applies discount codes")
+        }
+        
+        ContainerDb(db, "PostgreSQL", "Relational DB", "Stores data with ACID properties")
+        Container(async_log, "Async Event Logger", "Java Thread", "Asynchronously logs operations")
+    }
+
+    Rel(client, api, "REST API Calls", "JSON/HTTP")
+    Rel(payment, api, "Webhook Updates", "PATCH /status")
+    
+    Rel(api, booking_svc, "Delegates")
+    Rel(booking_svc, ticket_svc, "Process items")
+    Rel(booking_svc, voucher_svc, "Apply voucher")
+    
+    Rel(ticket_svc, db, "Atomic Updates (Row Lock)")
+    Rel(voucher_svc, db, "Read & Update Usage")
+    
+    Rel(booking_svc, async_log, "Publish Event")
+    Rel(async_log, db, "Insert OperationLog")
+```
+
+**Key Architectural Decisions (Trade-offs):**
+- **Facade Pattern:** Uses `BookingServiceImpl` as a Facade to coordinate `BookingItemProcessingService` and `VoucherProcessingService`.
+- **Concurrency Control:** Utilizes **Database Row Locks (Atomic Update)** instead of Distributed Cache Locks (like Redis) to keep the system lightweight while ensuring correctness under high load (Flash Sales).
+- **Idempotency:** Prevents duplicate orders during network failures using `idempotency_key`.
+
+*(For detailed Sequence Diagrams regarding Concurrency, Idempotency, and Voucher Calculation, please refer to the `docs/SEQUENCE_DIAGRAM.md` file).*
+
+## II. Database Design
+
+Core Entity-Relationship Diagram (ERD) of the system:
+
+```mermaid
+erDiagram
+    CONCERTS ||--o{ TICKET_CATEGORIES : "has"
+    USERS ||--o{ BOOKINGS : "places"
+    BOOKINGS ||--o{ BOOKING_ITEMS : "contains"
+    TICKET_CATEGORIES ||--o{ BOOKING_ITEMS : "reserved_in"
+    VOUCHERS ||--o{ VOUCHER_HISTORIES : "tracks_usage"
+    USERS ||--o{ VOUCHER_HISTORIES : "uses"
+    BOOKINGS ||--o{ VOUCHER_HISTORIES : "applied_on"
+    BOOKINGS ||--o{ OPERATION_LOGS : "logs"
+
+    CONCERTS {
+        int id PK
+        string title
+        datetime start_time
+    }
+    
+    TICKET_CATEGORIES {
+        int id PK
+        int concert_id FK
+        decimal price
+        int available_quantity
+    }
+    
+    BOOKINGS {
+        int id PK
+        int user_id FK
+        decimal total_price
+        string status
+        string idempotency_key
+    }
+    
+    BOOKING_ITEMS {
+        int id PK
+        int booking_id FK
+        int ticket_category_id FK
+        int quantity
+    }
+    
+    VOUCHERS {
+        int id PK
+        string code
+        decimal discount_amount
+        int max_usage
+        int max_usage_per_user
+    }
+    
+    VOUCHERS_HISTORIES {
+        int id PK
+        int user_id FK
+        int voucher_id FK
+        int booking_id FK
+    }
+```
+
+*Note: The `USERS` table is a logical identifier (assuming an external Identity Provider). Therefore, there is no physical User entity in this Backend codebase.*
+
+## III. Assumptions & Limitations
+
+*(For a detailed description of the reasoning behind design decisions, please see the `ASSUMPTIONS_AND_LIMITATIONS.md` file).*
+
+**Key Points Summary:**
+1. **Mock Data (Seeding):** Assumes the Admin has already created Concerts, Tickets, and Vouchers in the database. The system focuses entirely on the Booking Core Flow to solve complex problems. Master Data CRUD APIs (Add/Edit events) have been intentionally omitted.
+2. **Authentication (Auth):** The backend trusts the `userId` parameter passed via API (instead of extracting it from a real JWT token, due to scope limitations).
+3. **Payment:** The order status update API (`PATCH /api/bookings/{id}/status`) serves as a mock for a Webhook callback from a third-party payment gateway.
+4. **No Specific Seat Selection:** Ticket purchasing is currently based on the quantity of a *Ticket Category*, rather than reserving specific seats on a seating chart.
+
+## IV. API Document
+
+The system provides complete automated API documentation **using Swagger / OpenAPI 3.0**.
+
+After successfully running the project, you can access the Swagger UI interface at:
+👉 **[http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html)**
+
+In the Swagger UI, reviewers can:
+- View the complete list of Endpoints (Concerts, Bookings, Vouchers, Logs).
+- Inspect the Schema structures of DTOs (Request / Response).
+- Test API calls directly from the Browser (using the *Try it out* button).
+
+## V. Setup Guide
+
+### 1. System Requirements
+- Java 17+
+- Gradle
+- PostgreSQL 13+ (Local or via Docker)
+
+### 2. Database Configuration
+Update the Database connection details in the `src/main/resources/application.properties` file:
+```properties
+spring.datasource.url=jdbc:postgresql://localhost:5432/ticket_booking
+spring.datasource.username=postgres
+spring.datasource.password=postgres
+```
+*(The system uses `spring.jpa.hibernate.ddl-auto=update`, so table structures will be automatically created on the first run).*
+
+### 3. Running the Application
+Run the following command in the root directory of the project to start the Web Server:
+```bash
+./gradlew bootRun
+```
+
+### 4. Running Unit Tests
+The project includes critical Unit Tests (JUnit 5 & Mockito) used to verify complex technical challenges such as Concurrency handling (Overselling) and Voucher Abuse prevention.
+```bash
+./gradlew test
+```
