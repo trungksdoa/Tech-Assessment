@@ -150,13 +150,23 @@ spring.datasource.password=postgres
 ```
 *(The system uses `spring.jpa.hibernate.ddl-auto=update`, so table structures will be automatically created on the first run).*
 
-### 3. Running the Application
+### 3. Running with Docker (Recommended for Database)
+To quickly set up the PostgreSQL database without manual installation:
+```bash
+docker-compose up -d db
+```
+Alternatively, to run the entire application stack (App + DB):
+```bash
+docker-compose up --build
+```
+
+### 4. Running the Application Locally
 Run the following command in the root directory of the project to start the Web Server:
 ```bash
 ./gradlew bootRun
 ```
 
-### 4. Running Unit Tests
+### 5. Running Unit Tests
 The project includes critical Unit Tests (JUnit 5 & Mockito) used to verify complex technical challenges such as Concurrency handling (Overselling) and Voucher Abuse prevention.
 ```bash
 ./gradlew test
@@ -297,12 +307,24 @@ Truy cập tại: 👉 **[http://localhost:8080/swagger-ui/index.html](http://lo
 - Gradle
 - PostgreSQL 13+ (Chạy local hoặc qua Docker)
 
-### 2. Chạy Ứng dụng
+### 3. Chạy bằng Docker (Khuyên dùng cho Database)
+Để thiết lập nhanh cơ sở dữ liệu PostgreSQL mà không cần cài đặt thủ công:
+```bash
+docker-compose up -d db
+```
+Hoặc, để khởi chạy toàn bộ ứng dụng (App + DB):
+```bash
+docker-compose up --build
+```
+
+### 4. Chạy Ứng dụng Local
+Chạy lệnh sau tại thư mục gốc của dự án để khởi động Web Server:
 ```bash
 ./gradlew bootRun
 ```
 
-### 3. Chạy Unit Tests
+### 5. Chạy Unit Tests
+Dự án bao gồm các Unit Test quan trọng (JUnit 5 & Mockito) dùng để kiểm chứng các bài toán kỹ thuật phức tạp như xử lý đồng thời (Overselling) và chống gian lận Voucher.
 ```bash
 ./gradlew test
 ```
