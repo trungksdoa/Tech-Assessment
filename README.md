@@ -17,17 +17,17 @@ flowchart TD
     
     subgraph b1 ["Ticket Booking Platform"]
         direction TB
-        api["API Gateway / Controllers\n(Spring Boot)"]
+        api["API Gateway / Controllers", "Spring Boot", "Receives requests, handles Validation"]
         
         subgraph b2 ["Service Layer (Business Logic)"]
             direction TB
-            booking_svc["Booking Facade Service\n(Java)"]
-            ticket_svc["Ticket Processing\n(Java)"]
-            voucher_svc["Voucher Processing\n(Java)"]
+            booking_svc["Booking Facade Service", "Java", "Coordinates the main booking flow"]
+            ticket_svc["Ticket Processing", "Java", "Handles Atomic ticket deductions"]
+            voucher_svc["Voucher Processing", "Java", "Checks limits & applies discount codes"]
         end
         
-        db[("PostgreSQL\n(Relational DB)")]
-        async_log["Async Event Logger\n(Java Thread)"]
+        db[("PostgreSQL", "Relational DB", "Stores data with ACID properties")]
+        async_log["Async Event Logger", "Java Thread", "Asynchronously logs operations"]
     end
 
     client -- "REST API Calls\n[JSON/HTTP]" --> api
@@ -161,4 +161,148 @@ The project includes critical Unit Tests (JUnit 5 & Mockito) used to verify comp
 ```bash
 ./gradlew test
 ```
-# Tech-Assessment
+
+---
+
+# Tài liệu Dự án (Vietnamese Version)
+
+<div align="center">
+  <h1>BÀI KIỂM TRA KỸ THUẬT (TECHNICAL ASSESSMENT)</h1>
+  <h3>17/5/2026</h3>
+  <h4>Người nộp: Võ Hoàng Trung</h4>
+</div>
+
+## I. Thiết kế Hệ thống (System Design)
+
+Hệ thống được thiết kế theo kiến trúc Monolithic nhưng phân tách các thành phần một cách nghiêm ngặt dựa trên nguyên lý **Clean Architecture** và **SOLID**. Sơ đồ dưới đây minh họa luồng giao tiếp giữa các thành phần chính:
+
+```mermaid
+flowchart TD
+    client(["Client\n(Ứng dụng Frontend / Người dùng)"])
+    payment(["Cổng Thanh toán\n(Webhook từ nhà cung cấp)"])
+    
+    subgraph b1 ["Nền tảng Đặt vé Concert"]
+        direction TB
+        api["API Gateway / Controllers\n(Spring Boot)"]
+        
+        subgraph b2 ["Tầng Dịch vụ (Logic Nghiệp vụ)"]
+            direction TB
+            booking_svc["Dịch vụ Facade Đặt vé\n(Java)"]
+            ticket_svc["Xử lý Vé\n(Java)"]
+            voucher_svc["Xử lý Voucher\n(Java)"]
+        end
+        
+        db[("PostgreSQL\n(CSDL Quan hệ)")]
+        async_log["Trình ghi Sự kiện Bất đồng bộ\n(Java Thread)"]
+    end
+
+    client -- "Gọi REST API\n[JSON/HTTP]" --> api
+    payment -- "Cập nhật Webhook\n[PATCH /status]" --> api
+    
+    api -- "Ủy quyền xử lý" --> booking_svc
+    booking_svc -- "Xử lý các mục vé" --> ticket_svc
+    booking_svc -- "Áp dụng voucher" --> voucher_svc
+    
+    ticket_svc -- "Cập nhật Atomic (Khóa dòng)" --> db
+    voucher_svc -- "Đọc & Cập nhật Lượt dùng" --> db
+    
+    booking_svc -- "Phát hành Sự kiện" --> async_log
+    async_log -- "Chèn OperationLog" --> db
+```
+
+**Các quyết định Kiến trúc quan trọng:**
+- **Facade Pattern:** Sử dụng `BookingServiceImpl` làm Facade để điều phối `BookingItemProcessingService` và `VoucherProcessingService`.
+- **Kiểm soát Truy cập đồng thời:** Sử dụng **Khóa dòng CSDL (Atomic Update)** thay vì Khóa phân tán (như Redis) để giữ hệ thống nhẹ nhàng mà vẫn đảm bảo tính chính xác dưới tải cao (Flash Sales).
+- **Tính lũy đẳng (Idempotency):** Ngăn chặn đơn hàng trùng lặp khi gặp lỗi mạng bằng cơ chế `idempotency_key`.
+
+## II. Thiết kế Cơ sở dữ liệu (Database Design)
+
+Sơ đồ Thực thể - Mối quan hệ (ERD) cốt lõi của hệ thống:
+
+```mermaid
+erDiagram
+    CONCERTS ||--o{ TICKET_CATEGORIES : "có"
+    USERS ||--o{ BOOKINGS : "thực hiện"
+    BOOKINGS ||--o{ BOOKING_ITEMS : "bao gồm"
+    TICKET_CATEGORIES ||--o{ BOOKING_ITEMS : "được đặt trong"
+    VOUCHERS ||--o{ VOUCHER_HISTORIES : "theo dõi lượt dùng"
+    USERS ||--o{ VOUCHER_HISTORIES : "sử dụng"
+    BOOKINGS ||--o{ VOUCHER_HISTORIES : "áp dụng cho"
+    BOOKINGS ||--o{ OPERATION_LOGS : "ghi vết"
+
+    CONCERTS {
+        int id PK
+        string title
+        datetime start_time
+    }
+    
+    TICKET_CATEGORIES {
+        int id PK
+        int concert_id FK
+        decimal price
+        int available_quantity
+    }
+    
+    BOOKINGS {
+        int id PK
+        int user_id FK
+        decimal total_price
+        string status
+        string idempotency_key
+    }
+    
+    BOOKING_ITEMS {
+        int id PK
+        int booking_id FK
+        int ticket_category_id FK
+        int quantity
+    }
+    
+    VOUCHERS {
+        int id PK
+        string code
+        decimal discount_amount
+        int max_usage
+        int max_usage_per_user
+    }
+    
+    VOUCHERS_HISTORIES {
+        int id PK
+        int user_id FK
+        int voucher_id FK
+        int booking_id FK
+    }
+```
+
+## III. Giả định & Giới hạn (Assumptions & Limitations)
+
+*(Để xem mô tả chi tiết về lý do đằng sau các quyết định thiết kế, vui lòng tham khảo file `ASSUMPTIONS_AND_LIMITATIONS.md`).*
+
+**Tóm tắt các điểm chính:**
+1. **Dữ liệu giả lập (Seeding):** Giả định Admin đã tạo sẵn Concerts, Tickets và Vouchers trong CSDL.
+2. **Xác thực (Auth):** Backend tin tưởng tham số `userId` truyền qua API.
+3. **Thanh toán:** API cập nhật trạng thái đơn hàng đóng vai trò giả lập Webhook.
+4. **Không chọn ghế cụ thể:** Việc mua vé dựa trên số lượng của loại vé.
+
+## IV. Tài liệu API (API Document)
+
+Hệ thống cung cấp tài liệu API tự động đầy đủ **sử dụng Swagger / OpenAPI 3.0**.
+
+Truy cập tại: 👉 **[http://localhost:8080/swagger-ui/index.html](http://localhost:8080/swagger-ui/index.html)**
+
+## V. Hướng dẫn Cài đặt (Setup Guide)
+
+### 1. Yêu cầu Hệ thống
+- Java 17+
+- Gradle
+- PostgreSQL 13+
+
+### 2. Chạy Ứng dụng
+```bash
+./gradlew bootRun
+```
+
+### 3. Chạy Unit Tests
+```bash
+./gradlew test
+```
