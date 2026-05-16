@@ -17,17 +17,17 @@ flowchart TD
     
     subgraph b1 ["Ticket Booking Platform"]
         direction TB
-        api["API Gateway / Controllers", "Spring Boot", "Receives requests, handles Validation"]
+        api["API Gateway / Controllers\n(Spring Boot)"]
         
         subgraph b2 ["Service Layer (Business Logic)"]
             direction TB
-            booking_svc["Booking Facade Service", "Java", "Coordinates the main booking flow"]
-            ticket_svc["Ticket Processing", "Java", "Handles Atomic ticket deductions"]
-            voucher_svc["Voucher Processing", "Java", "Checks limits & applies discount codes"]
+            booking_svc["Booking Facade Service\n(Java)"]
+            ticket_svc["Ticket Processing\n(Java)"]
+            voucher_svc["Voucher Processing\n(Java)"]
         end
         
-        db[("PostgreSQL", "Relational DB", "Stores data with ACID properties")]
-        async_log["Async Event Logger", "Java Thread", "Asynchronously logs operations"]
+        db[("PostgreSQL\n(Relational DB)")]
+        async_log["Async Event Logger\n(Java Thread)"]
     end
 
     client -- "REST API Calls\n[JSON/HTTP]" --> api
@@ -174,40 +174,40 @@ The project includes critical Unit Tests (JUnit 5 & Mockito) used to verify comp
 
 ## I. Thiết kế Hệ thống (System Design)
 
-Hệ thống được thiết kế theo kiến trúc Monolithic nhưng phân tách các thành phần một cách nghiêm ngặt dựa trên nguyên lý **Clean Architecture** và **SOLID**. Sơ đồ dưới đây minh họa luồng giao tiếp giữa các thành phần chính:
+Hệ thống được thiết kế theo kiến trúc Monolithic nhưng phân tách các thành phần một cách nghiêm ngặt dựa trên nguyên lý **Clean Architecture** và **SOLID**. Sơ đồ dưới đây minh họa luồng giao tiếp giữa các thành phần chính (Sơ đồ được giữ nguyên bản tiếng Anh):
 
 ```mermaid
 flowchart TD
-    client(["Client\n(Ứng dụng Frontend / Người dùng)"])
-    payment(["Cổng Thanh toán\n(Webhook từ nhà cung cấp)"])
+    client(["Client\n(User / Frontend Application)"])
+    payment(["Payment Gateway\n(Webhook from payment provider)"])
     
-    subgraph b1 ["Nền tảng Đặt vé Concert"]
+    subgraph b1 ["Ticket Booking Platform"]
         direction TB
         api["API Gateway / Controllers\n(Spring Boot)"]
         
-        subgraph b2 ["Tầng Dịch vụ (Logic Nghiệp vụ)"]
+        subgraph b2 ["Service Layer (Business Logic)"]
             direction TB
-            booking_svc["Dịch vụ Facade Đặt vé\n(Java)"]
-            ticket_svc["Xử lý Vé\n(Java)"]
-            voucher_svc["Xử lý Voucher\n(Java)"]
+            booking_svc["Booking Facade Service\n(Java)"]
+            ticket_svc["Ticket Processing\n(Java)"]
+            voucher_svc["Voucher Processing\n(Java)"]
         end
         
-        db[("PostgreSQL\n(CSDL Quan hệ)")]
-        async_log["Trình ghi Sự kiện Bất đồng bộ\n(Java Thread)"]
+        db[("PostgreSQL\n(Relational DB)")]
+        async_log["Async Event Logger\n(Java Thread)"]
     end
 
-    client -- "Gọi REST API\n[JSON/HTTP]" --> api
-    payment -- "Cập nhật Webhook\n[PATCH /status]" --> api
+    client -- "REST API Calls\n[JSON/HTTP]" --> api
+    payment -- "Webhook Updates\n[PATCH /status]" --> api
     
-    api -- "Ủy quyền xử lý" --> booking_svc
-    booking_svc -- "Xử lý các mục vé" --> ticket_svc
-    booking_svc -- "Áp dụng voucher" --> voucher_svc
+    api -- "Delegates" --> booking_svc
+    booking_svc -- "Process items" --> ticket_svc
+    booking_svc -- "Apply voucher" --> voucher_svc
     
-    ticket_svc -- "Cập nhật Atomic (Khóa dòng)" --> db
-    voucher_svc -- "Đọc & Cập nhật Lượt dùng" --> db
+    ticket_svc -- "Atomic Updates (Row Lock)" --> db
+    voucher_svc -- "Read & Update Usage" --> db
     
-    booking_svc -- "Phát hành Sự kiện" --> async_log
-    async_log -- "Chèn OperationLog" --> db
+    booking_svc -- "Publish Event" --> async_log
+    async_log -- "Insert OperationLog" --> db
 ```
 
 **Các quyết định Kiến trúc quan trọng:**
@@ -217,18 +217,18 @@ flowchart TD
 
 ## II. Thiết kế Cơ sở dữ liệu (Database Design)
 
-Sơ đồ Thực thể - Mối quan hệ (ERD) cốt lõi của hệ thống:
+Sơ đồ Thực thể - Mối quan hệ (ERD) cốt lõi của hệ thống (Sơ đồ được giữ nguyên bản tiếng Anh):
 
 ```mermaid
 erDiagram
-    CONCERTS ||--o{ TICKET_CATEGORIES : "có"
-    USERS ||--o{ BOOKINGS : "thực hiện"
-    BOOKINGS ||--o{ BOOKING_ITEMS : "bao gồm"
-    TICKET_CATEGORIES ||--o{ BOOKING_ITEMS : "được đặt trong"
-    VOUCHERS ||--o{ VOUCHER_HISTORIES : "theo dõi lượt dùng"
-    USERS ||--o{ VOUCHER_HISTORIES : "sử dụng"
-    BOOKINGS ||--o{ VOUCHER_HISTORIES : "áp dụng cho"
-    BOOKINGS ||--o{ OPERATION_LOGS : "ghi vết"
+    CONCERTS ||--o{ TICKET_CATEGORIES : "has"
+    USERS ||--o{ BOOKINGS : "places"
+    BOOKINGS ||--o{ BOOKING_ITEMS : "contains"
+    TICKET_CATEGORIES ||--o{ BOOKING_ITEMS : "reserved_in"
+    VOUCHERS ||--o{ VOUCHER_HISTORIES : "tracks_usage"
+    USERS ||--o{ VOUCHER_HISTORIES : "uses"
+    BOOKINGS ||--o{ VOUCHER_HISTORIES : "applied_on"
+    BOOKINGS ||--o{ OPERATION_LOGS : "logs"
 
     CONCERTS {
         int id PK
@@ -279,9 +279,9 @@ erDiagram
 *(Để xem mô tả chi tiết về lý do đằng sau các quyết định thiết kế, vui lòng tham khảo file `ASSUMPTIONS_AND_LIMITATIONS.md`).*
 
 **Tóm tắt các điểm chính:**
-1. **Dữ liệu giả lập (Seeding):** Giả định Admin đã tạo sẵn Concerts, Tickets và Vouchers trong CSDL.
-2. **Xác thực (Auth):** Backend tin tưởng tham số `userId` truyền qua API.
-3. **Thanh toán:** API cập nhật trạng thái đơn hàng đóng vai trò giả lập Webhook.
+1. **Dữ liệu giả lập (Seeding):** Giả định Admin đã tạo sẵn Concerts, Tickets và Vouchers trong CSDL. Hệ thống tập trung hoàn toàn vào Luồng cốt lõi Đặt vé. Các API CRUD Master Data đã được lược bỏ.
+2. **Xác thực (Auth):** Backend tin tưởng tham số `userId` truyền qua API (thay vì trích xuất từ JWT token thật).
+3. **Thanh toán:** API cập nhật trạng thái đơn hàng đóng vai trò giả lập Webhook từ cổng thanh toán.
 4. **Không chọn ghế cụ thể:** Việc mua vé dựa trên số lượng của loại vé.
 
 ## IV. Tài liệu API (API Document)
@@ -295,7 +295,7 @@ Truy cập tại: 👉 **[http://localhost:8080/swagger-ui/index.html](http://lo
 ### 1. Yêu cầu Hệ thống
 - Java 17+
 - Gradle
-- PostgreSQL 13+
+- PostgreSQL 13+ (Chạy local hoặc qua Docker)
 
 ### 2. Chạy Ứng dụng
 ```bash
