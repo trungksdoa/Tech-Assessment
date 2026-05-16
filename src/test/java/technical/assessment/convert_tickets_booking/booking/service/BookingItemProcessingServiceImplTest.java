@@ -48,28 +48,36 @@ class BookingItemProcessingServiceImplTest {
         ticketCategory.setAvailableQuantity(10);
     }
 
+    /**
+     * Test logic: Xử lý đặt vé thành công khi số lượng tồn kho đủ.
+     * Kiểm tra xem hệ thống có tính đúng tổng tiền và gọi hàm update inventory không.
+     */
     @Test
     void processBookingItems_Success_WhenSufficientInventory() {
-        // Arrange
+        // Arrange: Giả lập tìm thấy loại vé và trừ kho thành công (trả về 1 dòng ảnh hưởng)
         when(ticketCategoryRepository.findById(100)).thenReturn(Optional.of(ticketCategory));
-        when(ticketCategoryRepository.reduceQuantity(100, 2)).thenReturn(1); // 1 row updated
+        when(ticketCategoryRepository.reduceQuantity(100, 2)).thenReturn(1); 
 
-        // Act
+        // Act: Thực hiện xử lý
         BigDecimal totalAmount = bookingItemProcessingService.processBookingItems(booking, List.of(itemRequest));
 
-        // Assert
+        // Assert: Tổng tiền phải là 1000.00 (2 vé * 500.00)
         assertEquals(new BigDecimal("1000.00"), totalAmount);
         verify(ticketCategoryRepository).reduceQuantity(100, 2);
     }
 
+    /**
+     * Test logic: Chống bán vượt vé (Overselling).
+     * Giả lập trường hợp có nhiều người cùng mua vé cuối cùng.
+     * Database sẽ trả về 0 nếu số lượng khả dụng không đủ trừ.
+     */
     @Test
     void processBookingItems_ThrowsException_WhenOversellingOccurs() {
-        // Arrange
+        // Arrange: Tìm thấy vé nhưng khi trừ kho thất bại (0 rows updated) vì tranh chấp đồng thời
         when(ticketCategoryRepository.findById(100)).thenReturn(Optional.of(ticketCategory));
-        // Simulate race condition where DB update fails (0 rows updated) because available_quantity < 2
         when(ticketCategoryRepository.reduceQuantity(100, 2)).thenReturn(0);
 
-        // Act & Assert
+        // Act & Assert: Phải ném lỗi BusinessException với thông báo hết vé
         BusinessException exception = assertThrows(BusinessException.class, () -> {
             bookingItemProcessingService.processBookingItems(booking, List.of(itemRequest));
         });
@@ -78,16 +86,20 @@ class BookingItemProcessingServiceImplTest {
         verify(ticketCategoryRepository).reduceQuantity(100, 2);
     }
 
+    /**
+     * Test logic: Trường hợp ID loại vé không tồn tại trong hệ thống.
+     */
     @Test
     void processBookingItems_ThrowsException_WhenTicketCategoryNotFound() {
-        // Arrange
+        // Arrange: Không tìm thấy loại vé trong DB
         when(ticketCategoryRepository.findById(100)).thenReturn(Optional.empty());
 
-        // Act & Assert
+        // Act & Assert: Phải ném lỗi ResourceNotFoundException
         assertThrows(ResourceNotFoundException.class, () -> {
             bookingItemProcessingService.processBookingItems(booking, List.of(itemRequest));
         });
         
+        // Đảm bảo không bao giờ gọi lệnh trừ kho nếu không tìm thấy vé
         verify(ticketCategoryRepository, never()).reduceQuantity(anyInt(), anyInt());
     }
 }

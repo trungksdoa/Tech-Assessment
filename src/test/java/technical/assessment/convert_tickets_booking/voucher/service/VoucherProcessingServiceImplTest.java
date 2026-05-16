@@ -53,27 +53,34 @@ class VoucherProcessingServiceImplTest {
                 .build();
     }
 
+    /**
+     * Test logic: Áp dụng voucher thành công.
+     * Voucher hợp lệ, lượt dùng của User và lượt dùng toàn hệ thống đều chưa vượt ngưỡng.
+     */
     @Test
     void applyVoucher_Success_WhenValidVoucherAndUsageBelowLimit() {
         // Arrange
         when(voucherRepository.findByCode("SUMMER2026")).thenReturn(Optional.of(voucher));
-        when(voucherHistoryRepository.countByUserIdAndVoucherId(1, 10)).thenReturn(1); // User used 1 time, limit is 2
-        when(voucherRepository.incrementUsage(10)).thenReturn(1); // Global limit lock succeeded
+        when(voucherHistoryRepository.countByUserIdAndVoucherId(1, 10)).thenReturn(1); // User mới dùng 1 lần, giới hạn là 2
+        when(voucherRepository.incrementUsage(10)).thenReturn(1); // Giả lập trừ quota thành công trong DB
 
         // Act
         Voucher appliedVoucher = voucherProcessingService.applyVoucher(booking, 1, "SUMMER2026");
 
         // Assert
         assertNotNull(appliedVoucher);
-        assertEquals(new BigDecimal("800.00"), booking.getTotalPrice()); // 1000 - 200
+        assertEquals(new BigDecimal("800.00"), booking.getTotalPrice()); // 1000 - 200 = 800
         verify(voucherRepository).incrementUsage(10);
     }
 
+    /**
+     * Test logic: Chặn User sử dụng voucher quá số lần cho phép (maxUsagePerUser).
+     */
     @Test
     void applyVoucher_ThrowsException_WhenUserExceedsMaxUsagePerUser() {
         // Arrange
         when(voucherRepository.findByCode("SUMMER2026")).thenReturn(Optional.of(voucher));
-        // Simulate user has already used the voucher 2 times (the limit is 2)
+        // Giả lập user đã dùng 2 lần (đã chạm mốc tối đa)
         when(voucherHistoryRepository.countByUserIdAndVoucherId(1, 10)).thenReturn(2);
 
         // Act & Assert
@@ -82,13 +89,17 @@ class VoucherProcessingServiceImplTest {
         });
 
         assertEquals("User has reached the maximum usage limit for this voucher.", exception.getMessage());
-        verify(voucherRepository, never()).incrementUsage(anyInt()); // Should not increment global usage
+        // Không được phép gọi lệnh tăng lượt dùng toàn hệ thống nếu user đã hết quyền dùng
+        verify(voucherRepository, never()).incrementUsage(anyInt()); 
     }
 
+    /**
+     * Test logic: Chặn sử dụng voucher đã hết hạn.
+     */
     @Test
     void applyVoucher_ThrowsException_WhenVoucherExpired() {
         // Arrange
-        voucher.setExpiryDate(LocalDateTime.now().minusDays(1)); // Expired yesterday
+        voucher.setExpiryDate(LocalDateTime.now().minusDays(1)); // Đã hết hạn từ hôm qua
         when(voucherRepository.findByCode("SUMMER2026")).thenReturn(Optional.of(voucher));
 
         // Act & Assert
@@ -99,12 +110,16 @@ class VoucherProcessingServiceImplTest {
         assertEquals("Voucher is expired.", exception.getMessage());
     }
 
+    /**
+     * Test logic: Chống tranh chấp đồng thời khi Voucher sắp hết lượt dùng toàn hệ thống (Global Limit).
+     * Ngay cả khi code Java check thấy còn lượt, nhưng DB update trả về 0 thì vẫn coi là thất bại.
+     */
     @Test
     void applyVoucher_ThrowsException_WhenGlobalLimitReachedConcurrently() {
         // Arrange
         when(voucherRepository.findByCode("SUMMER2026")).thenReturn(Optional.of(voucher));
         when(voucherHistoryRepository.countByUserIdAndVoucherId(1, 10)).thenReturn(0);
-        // Simulate concurrent usage where update fails
+        // DB trả về 0 nghĩa là lượt dùng cuối cùng đã bị người khác chiếm mất ngay trước đó
         when(voucherRepository.incrementUsage(10)).thenReturn(0);
 
         // Act & Assert
