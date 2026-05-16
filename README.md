@@ -11,41 +11,37 @@
 The system is designed with a Monolithic architecture but strictly separates components based on **Clean Architecture** and **SOLID** principles. The diagram below illustrates the communication flow between the main components:
 
 ```mermaid
----
-config:
-  theme: dark
----
-C4Context
-    title System Architecture - Concert Ticket Booking
+flowchart TD
+    client(["Client\n(User / Frontend Application)"])
+    payment(["Payment Gateway\n(Webhook from payment provider)"])
     
-    Person(client, "Client", "User / Frontend Application")
-    Person(payment, "Payment Gateway", "Webhook from payment provider")
-    
-    System_Boundary(b1, "Ticket Booking Platform") {
-        Container(api, "API Gateway / Controllers", "Spring Boot", "Receives requests, handles Validation")
+    subgraph b1 ["Ticket Booking Platform"]
+        direction TB
+        api["API Gateway / Controllers\n(Spring Boot)"]
         
-        System_Boundary(b2, "Service Layer (Business Logic)") {
-            Container(booking_svc, "Booking Facade Service", "Java", "Coordinates the main booking flow")
-            Container(ticket_svc, "Ticket Processing", "Java", "Handles Atomic ticket deductions")
-            Container(voucher_svc, "Voucher Processing", "Java", "Checks limits & applies discount codes")
-        }
+        subgraph b2 ["Service Layer (Business Logic)"]
+            direction TB
+            booking_svc["Booking Facade Service\n(Java)"]
+            ticket_svc["Ticket Processing\n(Java)"]
+            voucher_svc["Voucher Processing\n(Java)"]
+        end
         
-        ContainerDb(db, "PostgreSQL", "Relational DB", "Stores data with ACID properties")
-        Container(async_log, "Async Event Logger", "Java Thread", "Asynchronously logs operations")
-    }
+        db[("PostgreSQL\n(Relational DB)")]
+        async_log["Async Event Logger\n(Java Thread)"]
+    end
 
-    Rel(client, api, "REST API Calls", "JSON/HTTP")
-    Rel(payment, api, "Webhook Updates", "PATCH /status")
+    client -- "REST API Calls\n[JSON/HTTP]" --> api
+    payment -- "Webhook Updates\n[PATCH /status]" --> api
     
-    Rel(api, booking_svc, "Delegates")
-    Rel(booking_svc, ticket_svc, "Process items")
-    Rel(booking_svc, voucher_svc, "Apply voucher")
+    api -- "Delegates" --> booking_svc
+    booking_svc -- "Process items" --> ticket_svc
+    booking_svc -- "Apply voucher" --> voucher_svc
     
-    Rel(ticket_svc, db, "Atomic Updates (Row Lock)")
-    Rel(voucher_svc, db, "Read & Update Usage")
+    ticket_svc -- "Atomic Updates (Row Lock)" --> db
+    voucher_svc -- "Read & Update Usage" --> db
     
-    Rel(booking_svc, async_log, "Publish Event")
-    Rel(async_log, db, "Insert OperationLog")
+    booking_svc -- "Publish Event" --> async_log
+    async_log -- "Insert OperationLog" --> db
 ```
 
 **Key Architectural Decisions (Trade-offs):**
@@ -60,10 +56,6 @@ C4Context
 Core Entity-Relationship Diagram (ERD) of the system:
 
 ```mermaid
----
-config:
-  theme: dark
----
 erDiagram
     CONCERTS ||--o{ TICKET_CATEGORIES : "has"
     USERS ||--o{ BOOKINGS : "places"
